@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   extract:
@@ -71,3 +71,11 @@ jobs:
             MADAR_ERP_2.4.txt
             MADAR_ERP_2.5.txt
           if-no-files-found: error
+
+      - name: Commit extracted texts to temporary branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add MADAR_ERP_2.4.txt MADAR_ERP_2.5.txt
+          git commit -m "Add complete extracted text of MADAR ERP 2.4 and 2.5" || echo "No changes"
+          git push
