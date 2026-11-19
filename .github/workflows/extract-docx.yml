@@ -1,0 +1,73 @@
+name: Extract MADAR DOCX source texts
+
+on:
+  push:
+    branches:
+      - temporary/extract-docx-25
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout temporary branch
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install DOCX reader
+        run: pip install python-docx
+      - name: Extract paragraphs and tables in document order
+        shell: bash
+        run: |
+          python - <<'PY'
+          from docx import Document
+          from docx.text.paragraph import Paragraph
+          from docx.table import Table
+          from docx.oxml.text.paragraph import CT_P
+          from docx.oxml.table import CT_Tbl
+          from pathlib import Path
+
+          sources = [
+              ("MADAR ERP  2.4.docx", "MADAR_ERP_2.4.txt"),
+              ("MADAR ERP 2.5.docx", "MADAR_ERP_2.5.txt"),
+          ]
+
+          def extract(path):
+              doc = Document(path)
+              out = []
+              body = doc.element.body
+              for child in body.iterchildren():
+                  if isinstance(child, CT_P):
+                      p = Paragraph(child, doc)
+                      value = p.text.strip()
+                      if value:
+                          out.append(value)
+                  elif isinstance(child, CT_Tbl):
+                      table = Table(child, doc)
+                      out.append("[جدول]")
+                      for row in table.rows:
+                          cells = [" | ".join(x.strip() for x in cell.text.splitlines() if x.strip()) for cell in row.cells]
+                          out.append(" | ".join(cells))
+                      out.append("[نهاية الجدول]")
+              return "\\n\\n".join(out) + "\\n"
+
+          for source, target in sources:
+              if not Path(source).is_file():
+                  raise FileNotFoundError(source)
+              text = extract(source)
+              Path(target).write_text(text, encoding="utf-8")
+              print(f"{source}: extracted {len(text)} characters to {target}")
+          PY
+      - name: Upload extracted source texts
+        uses: actions/upload-artifact@v4
+        with:
+          name: madar-erp-source-texts
+          path: |
+            MADAR_ERP_2.4.txt
+            MADAR_ERP_2.5.txt
+          if-no-files-found: error
